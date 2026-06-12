@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TCGA Cancer Gene Explorer</title>
+<style>
+  :root {
+    --bg:      #0a0e1a;
+    --surface: #111827;
+    --card:    #1a2235;
+    --border:  #1e3a5f;
+    --accent:  #2d9cdb;
+    --accent2: #56ccf2;
+    --gold:    #f2c94c;
+    --green:   #27ae60;
+    --red:     #eb5757;
+    --text:    #e8edf5;
+    --muted:   #7a8fa6;
+    --mono:    'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  /* HEADER */
+  header {
+    background: linear-gradient(135deg, #0d1b35 0%, #0a1628 50%, #0d1b35 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 24px 24px;
+    text-align: center;
+    position: relative; overflow: hidden;
+  }
+  header::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(45,156,219,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .header-tag {
+    display: inline-block;
+    background: rgba(45,156,219,0.15); border: 1px solid rgba(45,156,219,0.3);
+    color: var(--accent2); font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;
+  }
+  h1 {
+    font-size: clamp(22px,5vw,36px); font-weight: 700; letter-spacing: -0.5px;
+    background: linear-gradient(135deg,#ffffff 0%,var(--accent2) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 8px;
+  }
+  .subtitle { color: var(--muted); font-size: 14px; max-width: 520px; margin: 0 auto; line-height: 1.5; }
+
+  /* STATS */
+  .stats-bar { display: flex; justify-content: center; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 80px; max-width: 160px; text-align: center; padding: 14px 8px; border-right: 1px solid var(--border); }
+  .stat:last-child { border-right: none; }
+  .stat-num { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+  /* MAIN */
+  main { max-width: 780px; margin: 0 auto; padding: 32px 20px 60px; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px; }
+  .tab {
+    flex: 1; text-align: center; padding: 10px; border-radius: 9px;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    color: var(--muted); border: none; background: none;
+  }
+  .tab.active { background: var(--card); color: var(--text); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* SEARCH CARD */
+  .search-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 24px; box-shadow: 0 4px 32px rgba(0,0,0,0.4); }
+  .search-label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px; display: block; }
+  .input-row { display: flex; gap: 10px; }
+  input[type="text"] {
+    flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); font-size: 16px; font-family: var(--mono); padding: 14px 18px;
+    outline: none; transition: border-color 0.2s, box-shadow 0.2s; letter-spacing: 1px;
+  }
+  input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(45,156,219,0.15); }
+  input[type="text"]::placeholder { color: #3a4a5c; }
+  button.btn-primary {
+    background: linear-gradient(135deg, var(--accent) 0%, #1a7ab5 100%);
+    border: none; border-radius: 10px; color: white; font-size: 15px;
+    font-weight: 600; padding: 14px 24px; cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s; white-space: nowrap;
+  }
+  button.btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+
+  .examples { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .examples-label { font-size: 12px; color: var(--muted); }
+  .example-chip {
+    background: rgba(45,156,219,0.1); border: 1px solid rgba(45,156,219,0.25);
+    border-radius: 20px; color: var(--accent2); font-size: 11px; font-family: var(--mono);
+    padding: 4px 12px; cursor: pointer; transition: background 0.15s; letter-spacing: 0.5px;
+  }
+  .example-chip:hover { background: rgba(45,156,219,0.2); }
+  .example-chip .gene-name-hint { color: var(--muted); font-family: sans-serif; font-size: 10px; margin-left: 4px; }
+
+  /* RESULT HEADER */
+  .result-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .gene-badge {
+    background: rgba(45,156,219,0.15); border: 1px solid var(--accent);
+    border-radius: 8px; color: var(--accent2); font-family: var(--mono);
+    font-size: 15px; font-weight: 600; padding: 6px 14px; letter-spacing: 1px;
+  }
+  .gene-name-display { font-size: 18px; font-weight: 700; color: white; }
+  .result-subtitle { font-size: 13px; color: var(--muted); width: 100%; margin-top: -6px; }
+
+  /* GENE INFO CARD */
+  .gene-info-card {
+    background: rgba(45,156,219,0.06); border: 1px solid rgba(45,156,219,0.2);
+    border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;
+  }
+  .gene-info-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); margin-bottom: 6px; }
+  .gene-info-desc { font-size: 13px; color: #b0c4d8; line-height: 1.7; }
+  .gene-info-nh { font-size: 13px; color: var(--muted); font-style: italic; }
+
+  /* MATCH CARDS */
+  .match-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px 22px; margin-bottom: 14px; position: relative; overflow: hidden; transition: border-color 0.2s;
+  }
+  .match-card:hover { border-color: var(--accent); }
+  .match-card.rank-1 { border-color: var(--gold); background: linear-gradient(135deg,#1f1d0d 0%,var(--card) 60%); }
+  .match-card.rank-1::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--gold),transparent); }
+
+  .match-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 12px; }
+  .match-rank { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); }
+  .match-card.rank-1 .match-rank { color: var(--gold); }
+  .cancer-name { font-size: 17px; font-weight: 600; color: var(--text); line-height: 1.3; flex: 1; }
+  .match-card.rank-1 .cancer-name { color: #fff; }
+  .score-badge {
+    background: rgba(45,156,219,0.15); border: 1px solid rgba(45,156,219,0.3);
+    border-radius: 8px; color: var(--accent2); font-size: 13px; font-weight: 600;
+    padding: 4px 10px; white-space: nowrap;
+  }
+  .match-card.rank-1 .score-badge { background: rgba(242,201,76,0.15); border-color: rgba(242,201,76,0.4); color: var(--gold); }
+
+  .bar-track { background: rgba(255,255,255,0.06); border-radius: 4px; height: 8px; overflow: hidden; margin-bottom: 14px; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); width: 0; }
+  .rank-1 .bar-fill { background: linear-gradient(90deg,#b8860b,var(--gold)); }
+  .rank-2 .bar-fill { background: linear-gradient(90deg,#1a7ab5,var(--accent)); }
+  .rank-3 .bar-fill { background: linear-gradient(90deg,#1d6e4e,#27ae60); }
+  .rank-other .bar-fill { background: var(--border); }
+
+  /* GENE CONTEXT ROW */
+  .gene-context { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .context-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; width: 100%; margin-bottom: 2px; }
+  .ctx-gene {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px; font-size: 11px; padding: 4px 10px; cursor: pointer;
+    transition: background 0.15s; display: flex; flex-direction: column; gap: 1px;
+  }
+  .ctx-gene:hover { background: rgba(45,156,219,0.15); border-color: rgba(45,156,219,0.4); }
+  .ctx-gene.highlighted { background: rgba(45,156,219,0.2); border-color: var(--accent); }
+  .ctx-gene-id { font-family: var(--mono); color: var(--accent2); font-size: 10px; }
+  .ctx-gene-name { color: #c0d0e0; font-size: 10px; }
+  .ctx-gene.highlighted .ctx-gene-id { color: #fff; font-weight: 700; }
+
+  /* BROWSE PANEL */
+  .browse-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .browse-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; cursor: pointer; transition: border-color 0.2s, background 0.2s;
+  }
+  .browse-card:hover { border-color: var(--accent); background: rgba(45,156,219,0.05); }
+  .browse-cancer { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; line-height: 1.3; }
+  .browse-top-gene { font-size: 11px; font-family: var(--mono); color: var(--accent2); }
+  .browse-top-name { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .browse-fscore { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+  /* CANCER DETAIL */
+  #cancer-detail { display: none; }
+  .back-btn {
+    background: none; border: 1px solid var(--border); border-radius: 8px;
+    color: var(--muted); font-size: 13px; padding: 8px 14px; cursor: pointer;
+    margin-bottom: 16px; transition: border-color 0.2s, color 0.2s;
+  }
+  .back-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .cancer-detail-title { font-size: 22px; font-weight: 700; color: white; margin-bottom: 6px; }
+  .cancer-detail-sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .gene-row {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; margin-bottom: 10px;
+  }
+  .gene-row-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .gene-row-id { font-family: var(--mono); color: var(--accent2); font-size: 13px; font-weight: 600; }
+  .gene-row-name { font-size: 15px; font-weight: 600; color: white; flex: 1; }
+  .gene-row-score { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .gene-row-desc { font-size: 12px; color: #8a9eb8; line-height: 1.6; }
+  .gene-row-nh { font-size: 12px; color: var(--muted); font-style: italic; }
+  .rank-pill {
+    width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+  .rank-pill-1 { background: rgba(242,201,76,0.2); color: var(--gold); border: 1px solid rgba(242,201,76,0.4); }
+  .rank-pill-2 { background: rgba(45,156,219,0.15); color: var(--accent); border: 1px solid rgba(45,156,219,0.3); }
+  .rank-pill-3 { background: rgba(39,174,96,0.15); color: var(--green); border: 1px solid rgba(39,174,96,0.3); }
+  .rank-pill-other { background: rgba(255,255,255,0.05); color: var(--muted); border: 1px solid var(--border); }
+
+  /* NOT FOUND */
+  #not-found { display: none; background: var(--card); border: 1px solid #3a1a1a; border-radius: 14px; padding: 32px; text-align: center; }
+  .nf-icon { font-size: 36px; margin-bottom: 12px; }
+  .nf-title { font-size: 18px; font-weight: 600; color: var(--red); margin-bottom: 8px; }
+  .nf-text { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+  /* EXPLAINER */
+  .explainer { background: rgba(45,156,219,0.06); border: 1px solid rgba(45,156,219,0.15); border-radius: 12px; padding: 18px 20px; margin-top: 28px; }
+  .explainer-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); margin-bottom: 8px; }
+  .explainer p { font-size: 13px; color: var(--muted); line-height: 1.7; }
+
+  footer { text-align: center; padding: 24px; font-size: 12px; color: #3a4a5c; border-top: 1px solid var(--border); }
+
+  @media (max-width: 480px) {
+    .input-row { flex-direction: column; }
+    button.btn-primary { width: 100%; }
+    .browse-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-tag">University of Groningen · Year 3 Project · 2026</div>
+  <h1>TCGA Cancer Gene Explorer</h1>
+  <p class="subtitle">Explore which cancer types specific genes predict — powered by machine learning trained on 9,185 TCGA tumour samples across 32 cancer types.</p>
+</header>
+
+<div class="stats-bar">
+  <div class="stat"><div class="stat-num">96.2%</div><div class="stat-label">Model accuracy</div></div>
+  <div class="stat"><div class="stat-num">32</div><div class="stat-label">Cancer types</div></div>
+  <div class="stat"><div class="stat-num">60,498</div><div class="stat-label">Genes analysed</div></div>
+  <div class="stat"><div class="stat-num">9,185</div><div class="stat-label">Tumour samples</div></div>
+</div>
+
+<main>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('search')">🔬 Search by Gene</button>
+    <button class="tab" onclick="switchTab('browse')">🧬 Browse by Cancer</button>
+  </div>
+
+  <!-- TAB 1: SEARCH -->
+  <div class="tab-panel active" id="tab-search">
+    <div class="search-card">
+      <label class="search-label" for="gene-input">Enter Ensembl Gene ID or Gene Name</label>
+      <div class="input-row">
+        <input type="text" id="gene-input" placeholder="e.g. ENSG00000107485 or GATA3" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button class="btn-primary" onclick="search()">Explore →</button>
+      </div>
+      <div class="examples">
+        <span class="examples-label">Try:</span>
+        <span class="example-chip" onclick="fillAndSearch('GATA3')">GATA3 <span class="gene-name-hint">breast</span></span>
+        <span class="example-chip" onclick="fillAndSearch('KLK3')">KLK3 <span class="gene-name-hint">prostate PSA</span></span>
+        <span class="example-chip" onclick="fillAndSearch('TG')">TG <span class="gene-name-hint">thyroid</span></span>
+        <span class="example-chip" onclick="fillAndSearch('INS')">INS <span class="gene-name-hint">insulin</span></span>
+        <span class="example-chip" onclick="fillAndSearch('NAPSA')">NAPSA <span class="gene-name-hint">lung</span></span>
+        <span class="example-chip" onclick="fillAndSearch('PMEL')">PMEL <span class="gene-name-hint">melanoma</span></span>
+        <span class="example-chip" onclick="fillAndSearch('ENSG00000107485')">ENSG00000107485</span>
+      </div>
+    </div>
+    <div id="search-results"></div>
+    <div id="not-found"></div>
+
+    <div class="explainer">
+      <div class="explainer-title">How this works</div>
+      <p>Our Logistic Regression model was trained on RNA-seq data from The Cancer Genome Atlas (TCGA), achieving <strong style="color:var(--text)">96.2% accuracy</strong> across 32 cancer types. Each gene was ranked using ANOVA F-tests in a one-vs-rest framework — measuring how strongly a gene's expression differs in each cancer type vs all others. The higher the F-score, the more diagnostic that gene is. Gene annotations were retrieved from the DAVID Bioinformatics database.</p>
+    </div>
+  </div>
+
+  <!-- TAB 2: BROWSE -->
+  <div class="tab-panel" id="tab-browse">
+    <div id="cancer-grid"></div>
+    <div id="cancer-detail">
+      <button class="back-btn" onclick="showGrid()">← Back to all cancers</button>
+      <div id="cancer-detail-content"></div>
+    </div>
+  </div>
+
+</main>
+
+<footer>TCGA Pan-Cancer Analysis · University of Groningen · 2026 · Logistic Regression (scikit-learn) · 96.2% test accuracy</footer>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// DATA — gene annotations from DAVID
+// ════════════════════════════════════════════════════════════
+const GENE_ANNOTATIONS = {
+  "ENSG00000107485": { name: "GATA3", desc: "GATA binding protein 3. An important regulator of T-cell development and endothelial cell biology. Belongs to the GATA family of transcription factors with two zinc fingers." },
+  "ENSG00000236666": { name: "POTEH-AS1", desc: null },
+  "ENSG00000253563": { name: "NKX2-1-AS1", desc: "NKX2-1 antisense RNA 1. Associated with thyroid-specific transcription. Mutations linked to congenital hypothyroidism and thyroid cancer." },
+  "ENSG00000136352": { name: "NKX2-1", desc: "NK2 homeobox 1. A thyroid-specific transcription factor that binds the thyroglobulin promoter. Mutations associated with congenital hypothyroidism and thyroid cancer." },
+  "ENSG00000257520": { name: "SFTA3", desc: "Surfactant-associated 3. Involved in wound healing. Located in cytoplasm and extracellular space." },
+  "ENSG00000142515": { name: "KLK3", desc: "Kallikrein related peptidase 3 (PSA). Synthesized in prostate epithelial cells. The serum level (PSA) is widely used in the diagnosis and monitoring of prostatic carcinoma." },
+  "ENSG00000198125": { name: "MB", desc: "Myoglobin. Predominantly expressed in skeletal and cardiac muscle. Responsible for storage and transfer of oxygen from cell membrane to mitochondria." },
+  "ENSG00000280306": { name: "NH", desc: null },
+  "ENSG00000229415": { name: "SFTA3", desc: "Surfactant-associated 3. Involved in wound healing. Located in cytoplasm and extracellular space." },
+  "ENSG00000254531": { name: "PPP3CA-DT", desc: null },
+  "ENSG00000235687": { name: "LINC00993", desc: null },
+  "ENSG00000014257": { name: "ACP3", desc: "Acid phosphatase 3. Synthesized under androgen regulation and secreted by prostate epithelial cells. Catalyzes conversion of orthophosphoric monoester to alcohol and orthophosphate." },
+  "ENSG00000143578": { name: "CREB3L4", desc: "cAMP responsive element binding protein 3 like 4. A transcriptional activator with a transmembrane domain localizing it to the ER membrane. May function in protein processing pathways." },
+  "ENSG00000214417": { name: "KRT18P13", desc: null },
+  "ENSG00000234918": { name: "NH", desc: null },
+  "ENSG00000176842": { name: "IRX5", desc: "Iroquois homeobox 5. Involved in embryonic developmental processes. Required for retinal cone bipolar cell differentiation and cardiac repolarization." },
+  "ENSG00000244402": { name: "RN7SL314P", desc: null },
+  "ENSG00000148513": { name: "ANKRD30A", desc: "Ankyrin repeat domain 30A. A DNA-binding transcription factor uniquely expressed in mammary epithelium and testis. Altered expression associated with breast cancer progression." },
+  "ENSG00000261039": { name: "RP11-417E7.2", desc: null },
+  "ENSG00000139865": { name: "TTC6", desc: null },
+  "ENSG00000160882": { name: "CYP11B1", desc: "Cytochrome P450 family 11 subfamily B member 1. Involved in conversion of progesterone to cortisol in the adrenal cortex. Mutations cause congenital adrenal hyperplasia." },
+  "ENSG00000179142": { name: "CYP11B2", desc: "Cytochrome P450 family 11 subfamily B member 2. Has steroid 18-hydroxylase activity to synthesize aldosterone. Mutations cause corticosterone methyl oxidase deficiency." },
+  "ENSG00000214266": { name: "STARP1", desc: null },
+  "ENSG00000137714": { name: "FDX1", desc: "Ferredoxin 1. A small iron-sulfur protein involved in steroid, vitamin D, and bile acid metabolism." },
+  "ENSG00000166917": { name: "MIR202HG", desc: null },
+  "ENSG00000110375": { name: "UPK2", desc: "Uroplakin 2. A urothelium-specific integral membrane protein that strengthens the urothelium. Expressed in peripheral blood of bladder cancer patients." },
+  "ENSG00000250256": { name: "NH", desc: null },
+  "ENSG00000268864": { name: "SLC7A2P", desc: null },
+  "ENSG00000215834": { name: "FMO9P", desc: null },
+  "ENSG00000158786": { name: "PLA2G2F", desc: "Phospholipase A2 group IIF. Involved in glycerophospholipid metabolic process. Enables calcium-dependent phospholipase A2 activity." },
+  "ENSG00000248184": { name: "LINC02283", desc: null },
+  "ENSG00000224924": { name: "LINC00320", desc: null },
+  "ENSG00000258342": { name: "LINC00609", desc: null },
+  "ENSG00000238194": { name: "PHACTR3-AS1", desc: null },
+  "ENSG00000248518": { name: "lincRNA", desc: "Long intergenic non-coding RNA with limited functional characterization." },
+  "ENSG00000240800": { name: "NH", desc: null },
+  "ENSG00000110484": { name: "SCGB2A2", desc: "Secretoglobin family 2A member 2. Predicted to be involved in androgen receptor signaling pathway." },
+  "ENSG00000206073": { name: "SERPINB4", desc: "Serpin family B member 4. A serine protease inhibitor highly expressed in tumor cells. Can inactivate granzyme M, an enzyme that kills tumor cells." },
+  "ENSG00000206786": { name: "RNU6-701P", desc: null },
+  "ENSG00000261824": { name: "LINC00662", desc: null },
+  "ENSG00000077935": { name: "SMC1B", desc: "Structural maintenance of chromosome 1B. Required for chromatid cohesion and DNA recombination during meiosis and mitosis." },
+  "ENSG00000057149": { name: "SERPINB3", desc: "Serpin family B member 3. Involved in autocrine signaling, paracrine signaling, and regulation of protein metabolic process." },
+  "ENSG00000223603": { name: "APCS", desc: "Amyloid P component, serum. A glycoprotein of the pentraxin family. Binds to apoptotic cells at early stages and may be involved in chromatin degradation." },
+  "ENSG00000158731": { name: "OR10J6P", desc: "Olfactory receptor family 10 subfamily J member 6 pseudogene. G-protein-coupled receptor family involved in odorant signal transduction." },
+  "ENSG00000202276": { name: "NH", desc: null },
+  "ENSG00000259534": { name: "NH", desc: null },
+  "ENSG00000132703": { name: "APCS", desc: null },
+  "ENSG00000256643": { name: "LINC02441", desc: null },
+  "ENSG00000095110": { name: "NXPE1", desc: "Neurexophilin and PC-esterase domain family member 1. Predicted to be located in extracellular region and membrane." },
+  "ENSG00000016490": { name: "CLCA1", desc: "Chloride channel accessory 1. May mediate calcium-activated chloride conductance in the intestine. Expressed as a precursor processed into two cell-surface subunits." },
+  "ENSG00000183463": { name: "URAD", desc: "Ureidoimidazoline decarboxylase. Predicted to be involved in urate catabolic process and nucleobase-containing small molecule metabolism." },
+  "ENSG00000007952": { name: "NOX1", desc: "NADPH oxidase 1. Catalyzes one-electron transfer of oxygen to generate superoxide or hydrogen peroxide." },
+  "ENSG00000224648": { name: "LINC01627", desc: null },
+  "ENSG00000231681": { name: "NH", desc: null },
+  "ENSG00000235620": { name: "NH", desc: null },
+  "ENSG00000164500": { name: "SPMIP7", desc: "Sperm microtubule inner protein 7. Predicted to be involved in spermatogenesis." },
+  "ENSG00000200645": { name: "RNU6-1210P", desc: null },
+  "ENSG00000228289": { name: "NH", desc: null },
+  "ENSG00000256657": { name: "NH", desc: null },
+  "ENSG00000256338": { name: "RPL41P2", desc: null },
+  "ENSG00000234167": { name: "ELOBP4", desc: null },
+  "ENSG00000259735": { name: "FAM81A", desc: null },
+  "ENSG00000216829": { name: "FGF7P4", desc: null },
+  "ENSG00000260850": { name: "RP11-437L7.1", desc: null },
+  "ENSG00000250377": { name: "GlincRNA", desc: null },
+  "ENSG00000221745": { name: "MIR1197", desc: "MicroRNA 1197. A short non-coding RNA involved in post-transcriptional regulation of gene expression. Incorporated into RISC complex for target mRNA silencing." },
+  "ENSG00000228592": { name: "NH", desc: null },
+  "ENSG00000185966": { name: "LCE3E", desc: "Late cornified envelope 3E. Predicted to be involved in keratinization." },
+  "ENSG00000163202": { name: "LCE3D", desc: "Late cornified envelope 3D. Predicted to be involved in keratinization." },
+  "ENSG00000185962": { name: "LCE3A", desc: "Late cornified envelope 3A. Involved in defense response to bacteria and killing of cells of another organism." },
+  "ENSG00000196805": { name: "SPRR2B", desc: "Small proline rich protein 2B. Predicted to be involved in keratinocyte differentiation." },
+  "ENSG00000184148": { name: "SPRR4", desc: "Small proline rich protein 4. Predicted to be involved in keratinization." },
+  "ENSG00000254517": { name: "NH", desc: null },
+  "ENSG00000215117": { name: "LINC00588", desc: null },
+  "ENSG00000225064": { name: "LINC01802", desc: null },
+  "ENSG00000265460": { name: "RP11-690G19.4", desc: null },
+  "ENSG00000256362": { name: "LINC02375", desc: null },
+  "ENSG00000235139": { name: "LINC03017", desc: null },
+  "ENSG00000232271": { name: "NH", desc: null },
+  "ENSG00000272027": { name: "NH", desc: null },
+  "ENSG00000224490": { name: "TTC21B-AS1", desc: null },
+  "ENSG00000233456": { name: "LINC01077", desc: null },
+  "ENSG00000226193": { name: "SYNE1-AS2", desc: null },
+  "ENSG00000081800": { name: "SLC13A1", desc: "Solute carrier family 13 member 1. An apical membrane Na+-sulfate cotransporter involved in sulfate homeostasis in the kidney." },
+  "ENSG00000188029": { name: "CTSL3P", desc: null },
+  "ENSG00000251292": { name: "ERVH-1", desc: null },
+  "ENSG00000226337": { name: "TMEM252-DT", desc: null },
+  "ENSG00000276911": { name: "NH", desc: null },
+  "ENSG00000101981": { name: "F9", desc: "Coagulation factor IX. A vitamin K-dependent coagulation factor that circulates as an inactive zymogen. Alterations cause hemophilia B (Christmas disease)." },
+  "ENSG00000080910": { name: "CFHR2", desc: "Complement factor H-related 2. Involved in regulation of complement. Mutations associated with dense deposit disease and atypical haemolytic-uraemic syndrome." },
+  "ENSG00000261012": { name: "NH", desc: null },
+  "ENSG00000229740": { name: "NH", desc: null },
+  "ENSG00000131400": { name: "NAPSA", desc: "Napsin A aspartic peptidase. May play a role in processing of pulmonary surfactant protein B. Described as a marker for lung adenocarcinoma and renal cell carcinoma." },
+  "ENSG00000273877": { name: "NH", desc: null },
+  "ENSG00000256615": { name: "KCNJ8-AS1", desc: null },
+  "ENSG00000122852": { name: "SFTPA1", desc: "Surfactant protein A1. A lung surfactant protein essential for surfactant homeostasis and defense against respiratory pathogens. Mutations associated with idiopathic pulmonary fibrosis." },
+  "ENSG00000168878": { name: "SFTPB", desc: "Surfactant protein B. Essential for lung function and homeostasis. Maintains stability of pulmonary tissue by reducing surface tension. Mutations cause fatal neonatal respiratory distress." },
+  "ENSG00000223679": { name: "SLC5A1P", desc: null },
+  "ENSG00000213495": { name: "RPL26P13", desc: null },
+  "ENSG00000234862": { name: "NH", desc: null },
+  "ENSG00000271134": { name: "IFITM3P9", desc: null },
+  "ENSG00000224919": { name: "NH", desc: null },
+  "ENSG00000226722": { name: "LINC00424", desc: null },
+  "ENSG00000258115": { name: "SCGB1D1", desc: "Secretoglobin family 1D member 1. A member of the lipophilin subfamily. Transcriptionally regulated by steroid hormones with the ability to bind androgens and other steroids." },
+  "ENSG00000234034": { name: "NH", desc: null },
+  "ENSG00000223488": { name: "MAPK6P2", desc: null },
+  "ENSG00000226956": { name: "NH", desc: null },
+  "ENSG00000168515": { name: "SCGB1D1", desc: null },
+  "ENSG00000237326": { name: "NH", desc: null },
+  "ENSG00000231295": { name: "NH", desc: null },
+  "ENSG00000236253": { name: "SLC25A3P1", desc: null },
+  "ENSG00000228890": { name: "TTTY7B", desc: null },
+  "ENSG00000237563": { name: "TTTY7", desc: null },
+  "ENSG00000254647": { name: "INS", desc: "Insulin. A peptide hormone vital for regulation of carbohydrate and lipid metabolism. Binding to the insulin receptor stimulates glucose uptake. Mutant alleles cause diabetes mellitus." },
+  "ENSG00000175535": { name: "PNLIP", desc: "Pancreatic lipase. Secreted by the pancreas and hydrolyzes triglycerides in the small intestine. Essential for efficient digestion of dietary fats." },
+  "ENSG00000179751": { name: "SYCN", desc: "Syncollin. Predicted to be involved in exocytosis and located in zymogen granule membrane." },
+  "ENSG00000250467": { name: "PHOX2B-AS1", desc: null },
+  "ENSG00000207569": { name: "MIR433", desc: "MicroRNA 433. A short non-coding RNA involved in post-transcriptional regulation. Incorporated into RISC complex affecting mRNA stability and translation." },
+  "ENSG00000249122": { name: "NH", desc: null },
+  "ENSG00000109132": { name: "PHOX2B", desc: "Paired like homeobox 2B. A transcription factor involved in development of noradrenergic neuron populations. Expansion of its polyalanine tract associated with congenital central hypoventilation syndrome." },
+  "ENSG00000243062": { name: "NH", desc: null },
+  "ENSG00000276888": { name: "NH", desc: null },
+  "ENSG00000267465": { name: "NH", desc: null },
+  "ENSG00000275563": { name: "NH", desc: null },
+  "ENSG00000229370": { name: "NH", desc: null },
+  "ENSG00000225421": { name: "NH", desc: null },
+  "ENSG00000224099": { name: "NH", desc: null },
+  "ENSG00000076826": { name: "CAMSAP3", desc: "Calmodulin regulated spectrin associated protein family member 3. Enables actin filament binding and microtubule minus-end binding. Involved in microtubule cytoskeleton organization." },
+  "ENSG00000067606": { name: "PRKCZ", desc: "Protein kinase C zeta. Involved in cellular processes including proliferation, differentiation and secretion. Unlike classical PKC isoenzymes, its kinase activity is independent of calcium and diacylglycerol." },
+  "ENSG00000275234": { name: "NH", desc: null },
+  "ENSG00000065361": { name: "ERBB3", desc: "Erb-b2 receptor tyrosine kinase 3. A member of the EGFR family. Forms heterodimers with other EGF receptor family members leading to cell proliferation or differentiation. Amplification reported in prostate, bladder, and breast tumors." },
+  "ENSG00000130545": { name: "CRB3", desc: "Crumbs cell polarity complex component 3. Plays roles in control of cytokinesis and ciliogenesis, and formation of tight junctions in epithelial tissues." },
+  "ENSG00000223362": { name: "CDY15P", desc: null },
+  "ENSG00000124900": { name: "TRIM51", desc: "Tripartite motif-containing 51. Predicted to enable ubiquitin protein ligase activity. Involved in innate immune response and regulation of gene expression." },
+  "ENSG00000185664": { name: "PMEL", desc: "Premelanosome protein. A melanocyte-specific glycoprotein enriched in melanosomes. Plays an essential role in structural organization of premelanosomes. A secreted form may be used as a melanoma-specific serum marker." },
+  "ENSG00000077498": { name: "TYR", desc: "Tyrosinase. Catalyzes the first steps in conversion of tyrosine to melanin. Requires copper for function. Mutations result in oculocutaneous albinism; polymorphisms result in skin pigmentation variation." },
+  "ENSG00000254813": { name: "NH", desc: null },
+  "ENSG00000169876": { name: "MUC17", desc: "Mucin 17, cell surface-associated. A membrane-bound mucin that provides protection to gut epithelial cells. Contains about 60 tandem repeats." },
+  "ENSG00000279502": { name: "NH", desc: null },
+  "ENSG00000233376": { name: "HNF4A-AS1", desc: null },
+  "ENSG00000228830": { name: "NH", desc: null },
+  "ENSG00000274652": { name: "NH", desc: null },
+  "ENSG00000176979": { name: "TRIM60", desc: null },
+  "ENSG00000204547": { name: "DEFB122", desc: null },
+  "ENSG00000187569": { name: "DPPA3", desc: "Developmental pluripotency associated 3. May function as a maternal factor during preimplantation development. May play a role in transcriptional repression and maintenance of cell pluripotentiality." },
+  "ENSG00000227059": { name: "ANHX", desc: "Anomalous homeobox. Predicted to be involved in regulation of skeletal muscle cell proliferation and transcription by RNA polymerase II." },
+  "ENSG00000236656": { name: "NH", desc: null },
+  "ENSG00000198965": { name: "OR10R2", desc: "Olfactory receptor family 10 subfamily R member 2. G-protein-coupled receptor involved in odorant signal transduction." },
+  "ENSG00000198703": { name: "OR10R3P", desc: "Olfactory receptor family 10 subfamily R member 3 pseudogene. G-protein-coupled receptor family involved in odorant signal transduction." },
+  "ENSG00000278410": { name: "NH", desc: null },
+  "ENSG00000235492": { name: "LINC01221", desc: null },
+  "ENSG00000240237": { name: "RPL21P78", desc: null },
+  "ENSG00000042832": { name: "TG", desc: "Thyroglobulin. A glycoprotein homodimer produced predominantly by the thyroid gland. Acts as a substrate for synthesis of thyroxine and triiodothyronine, and storage of thyroid hormone and iodine." },
+  "ENSG00000186146": { name: "DEFB131A", desc: "Defensin beta 131A. An antimicrobial protein important in the immunologic response to invading microorganisms. A member of the beta defensin protein family." },
+  "ENSG00000249295": { name: "NH", desc: null },
+  "ENSG00000204368": { name: "SSX20P", desc: null },
+  "ENSG00000232064": { name: "USP9Y-P33", desc: null },
+  "ENSG00000252508": { name: "RNU4ATAC3P", desc: null },
+  "ENSG00000242671": { name: "LINC02010", desc: null },
+  "ENSG00000143353": { name: "LYPLAL1", desc: "Lysophospholipase like 1. Involved in negative regulation of cGAS/STING signaling pathway. Located in cytosol." },
+  "ENSG00000228082": { name: "SIM1-AS1", desc: null },
+  "ENSG00000260676": { name: "LINC01541", desc: null },
+  "ENSG00000164736": { name: "SOX17", desc: "SRY-box transcription factor 17. A member of the SOX family involved in regulation of embryonic development and determination of cell fate." },
+  "ENSG00000197745": { name: "SCGB1D4", desc: "Secretoglobin family 1D member 4. Predicted to be located in extracellular region." },
+  "ENSG00000163132": { name: "MSX1", desc: "Msh homeobox 1. A transcriptional repressor during embryogenesis. Has roles in limb-pattern formation, craniofacial development, and tumor growth inhibition." },
+  "ENSG00000168818": { name: "STX18", desc: "Syntaxin 18. A SNARE protein involved in vesicular transport between the endoplasmic reticulum and Golgi complex. Important for organization of smooth, rough, and exit site ER subdomains." },
+  "ENSG00000249727": { name: "NH", desc: null },
+  "ENSG00000120215": { name: "MLANA", desc: "Melan-A. Located in endoplasmic reticulum membrane, melanosome, and trans-Golgi network. A melanocyte differentiation antigen used as a melanoma marker." },
+  "ENSG00000118434": { name: "SPACA1", desc: "Sperm acrosome-associated 1. Localizes to the acrosomal membrane of spermatids. Thought to play a role in acrosomal morphogenesis and sperm-egg binding and fusion." },
+};
+
+// Build name → gene ID reverse lookup
+const NAME_TO_ID = {};
+Object.entries(GENE_ANNOTATIONS).forEach(([id, ann]) => {
+  if (ann.name && ann.name !== "NH") {
+    NAME_TO_ID[ann.name.toUpperCase()] = id;
+  }
+});
+
+// RAW DATA
+const RAW = [
+  ["adrenocortical cancer","ENSG00000160882",5933.92,1],
+  ["adrenocortical cancer","ENSG00000179142",5702.44,2],
+  ["adrenocortical cancer","ENSG00000214266",1894.22,3],
+  ["adrenocortical cancer","ENSG00000137714",1813.45,4],
+  ["adrenocortical cancer","ENSG00000166917",1622.10,5],
+  ["bladder urothelial carcinoma","ENSG00000110375",2732.62,1],
+  ["bladder urothelial carcinoma","ENSG00000250256",2643.20,2],
+  ["bladder urothelial carcinoma","ENSG00000268864",2484.39,3],
+  ["bladder urothelial carcinoma","ENSG00000215834",2220.30,4],
+  ["bladder urothelial carcinoma","ENSG00000158786",2117.67,5],
+  ["brain lower grade glioma","ENSG00000248184",29347.41,1],
+  ["brain lower grade glioma","ENSG00000224924",23293.72,2],
+  ["brain lower grade glioma","ENSG00000258342",22531.30,3],
+  ["brain lower grade glioma","ENSG00000238194",21853.68,4],
+  ["brain lower grade glioma","ENSG00000248518",21839.78,5],
+  ["breast invasive carcinoma","ENSG00000234918",14744.59,1],
+  ["breast invasive carcinoma","ENSG00000240800",14334.15,2],
+  ["breast invasive carcinoma","ENSG00000148513",14200.56,3],
+  ["breast invasive carcinoma","ENSG00000110484",13414.40,4],
+  ["breast invasive carcinoma","ENSG00000244402",13358.69,5],
+  ["cervical & endocervical cancer","ENSG00000206073",1146.67,1],
+  ["cervical & endocervical cancer","ENSG00000206786",1133.66,2],
+  ["cervical & endocervical cancer","ENSG00000261824",1074.51,3],
+  ["cervical & endocervical cancer","ENSG00000077935",1059.49,4],
+  ["cervical & endocervical cancer","ENSG00000057149",1050.93,5],
+  ["cholangiocarcinoma","ENSG00000223603",665.52,1],
+  ["cholangiocarcinoma","ENSG00000158731",636.63,2],
+  ["cholangiocarcinoma","ENSG00000202276",632.64,3],
+  ["cholangiocarcinoma","ENSG00000259534",394.06,4],
+  ["cholangiocarcinoma","ENSG00000132703",392.19,5],
+  ["colon adenocarcinoma","ENSG00000256643",4898.12,1],
+  ["colon adenocarcinoma","ENSG00000095110",3757.05,2],
+  ["colon adenocarcinoma","ENSG00000016490",3591.05,3],
+  ["colon adenocarcinoma","ENSG00000183463",3448.31,4],
+  ["colon adenocarcinoma","ENSG00000007952",3202.34,5],
+  ["diffuse large B-cell lymphoma","ENSG00000224648",3197.10,1],
+  ["diffuse large B-cell lymphoma","ENSG00000231681",2772.61,2],
+  ["diffuse large B-cell lymphoma","ENSG00000235620",2719.51,3],
+  ["diffuse large B-cell lymphoma","ENSG00000164500",2324.93,4],
+  ["diffuse large B-cell lymphoma","ENSG00000200645",1906.84,5],
+  ["esophageal carcinoma","ENSG00000228289",2206.90,1],
+  ["esophageal carcinoma","ENSG00000256657",1744.13,2],
+  ["esophageal carcinoma","ENSG00000256338",1683.18,3],
+  ["esophageal carcinoma","ENSG00000234167",1674.39,4],
+  ["esophageal carcinoma","ENSG00000259735",1660.91,5],
+  ["glioblastoma multiforme","ENSG00000216829",2631.52,1],
+  ["glioblastoma multiforme","ENSG00000260850",2623.98,2],
+  ["glioblastoma multiforme","ENSG00000250377",2472.27,3],
+  ["glioblastoma multiforme","ENSG00000221745",2272.39,4],
+  ["glioblastoma multiforme","ENSG00000228592",2246.02,5],
+  ["head & neck squamous cell carcinoma","ENSG00000185966",5484.45,1],
+  ["head & neck squamous cell carcinoma","ENSG00000163202",5475.77,2],
+  ["head & neck squamous cell carcinoma","ENSG00000185962",4567.60,3],
+  ["head & neck squamous cell carcinoma","ENSG00000196805",4556.98,4],
+  ["head & neck squamous cell carcinoma","ENSG00000184148",4495.64,5],
+  ["kidney chromophobe","ENSG00000254517",5882.97,1],
+  ["kidney chromophobe","ENSG00000215117",2947.59,2],
+  ["kidney chromophobe","ENSG00000225064",2849.72,3],
+  ["kidney chromophobe","ENSG00000265460",2709.46,4],
+  ["kidney chromophobe","ENSG00000256362",2594.17,5],
+  ["kidney clear cell carcinoma","ENSG00000235139",12853.15,1],
+  ["kidney clear cell carcinoma","ENSG00000232271",12294.37,2],
+  ["kidney clear cell carcinoma","ENSG00000272027",9731.64,3],
+  ["kidney clear cell carcinoma","ENSG00000224490",8992.13,4],
+  ["kidney clear cell carcinoma","ENSG00000233456",8822.40,5],
+  ["kidney papillary cell carcinoma","ENSG00000226193",3309.15,1],
+  ["kidney papillary cell carcinoma","ENSG00000081800",3297.17,2],
+  ["kidney papillary cell carcinoma","ENSG00000188029",2878.50,3],
+  ["kidney papillary cell carcinoma","ENSG00000251292",2651.71,4],
+  ["kidney papillary cell carcinoma","ENSG00000226337",2643.12,5],
+  ["liver hepatocellular carcinoma","ENSG00000276911",37393.75,1],
+  ["liver hepatocellular carcinoma","ENSG00000101981",30493.96,2],
+  ["liver hepatocellular carcinoma","ENSG00000080910",26429.98,3],
+  ["liver hepatocellular carcinoma","ENSG00000261012",23880.53,4],
+  ["liver hepatocellular carcinoma","ENSG00000229740",18675.93,5],
+  ["lung adenocarcinoma","ENSG00000131400",6116.86,1],
+  ["lung adenocarcinoma","ENSG00000273877",4926.98,2],
+  ["lung adenocarcinoma","ENSG00000256615",4572.42,3],
+  ["lung adenocarcinoma","ENSG00000122852",4451.41,4],
+  ["lung adenocarcinoma","ENSG00000168878",3941.43,5],
+  ["lung squamous cell carcinoma","ENSG00000223679",4192.46,1],
+  ["lung squamous cell carcinoma","ENSG00000213495",2844.86,2],
+  ["lung squamous cell carcinoma","ENSG00000234862",2669.58,3],
+  ["lung squamous cell carcinoma","ENSG00000271134",2569.63,4],
+  ["lung squamous cell carcinoma","ENSG00000122852",2259.73,5],
+  ["mesothelioma","ENSG00000224919",4705.54,1],
+  ["mesothelioma","ENSG00000226722",1811.38,2],
+  ["mesothelioma","ENSG00000258115",1789.09,3],
+  ["mesothelioma","ENSG00000234034",1458.95,4],
+  ["mesothelioma","ENSG00000223488",1017.81,5],
+  ["ovarian serous cystadenocarcinoma","ENSG00000226956",9123.84,1],
+  ["ovarian serous cystadenocarcinoma","ENSG00000168515",8305.87,2],
+  ["ovarian serous cystadenocarcinoma","ENSG00000237326",8186.15,3],
+  ["ovarian serous cystadenocarcinoma","ENSG00000231295",7543.82,4],
+  ["ovarian serous cystadenocarcinoma","ENSG00000236253",6956.33,5],
+  ["pancreatic adenocarcinoma","ENSG00000228890",9842.50,1],
+  ["pancreatic adenocarcinoma","ENSG00000237563",9842.50,2],
+  ["pancreatic adenocarcinoma","ENSG00000254647",8034.40,3],
+  ["pancreatic adenocarcinoma","ENSG00000175535",5127.97,4],
+  ["pancreatic adenocarcinoma","ENSG00000179751",4106.80,5],
+  ["pheochromocytoma & paraganglioma","ENSG00000250467",26888.20,1],
+  ["pheochromocytoma & paraganglioma","ENSG00000207569",12496.24,2],
+  ["pheochromocytoma & paraganglioma","ENSG00000249122",10704.16,3],
+  ["pheochromocytoma & paraganglioma","ENSG00000109132",9340.71,4],
+  ["pheochromocytoma & paraganglioma","ENSG00000243062",8898.27,5],
+  ["prostate adenocarcinoma","ENSG00000276888",37523.19,1],
+  ["prostate adenocarcinoma","ENSG00000236666",31188.63,2],
+  ["prostate adenocarcinoma","ENSG00000267465",24561.59,3],
+  ["prostate adenocarcinoma","ENSG00000275563",22546.64,4],
+  ["prostate adenocarcinoma","ENSG00000229370",21063.09,5],
+  ["rectum adenocarcinoma","ENSG00000256643",1623.55,1],
+  ["rectum adenocarcinoma","ENSG00000225421",955.61,2],
+  ["rectum adenocarcinoma","ENSG00000095110",948.17,3],
+  ["rectum adenocarcinoma","ENSG00000007952",888.30,4],
+  ["rectum adenocarcinoma","ENSG00000224099",851.92,5],
+  ["sarcoma","ENSG00000076826",4994.32,1],
+  ["sarcoma","ENSG00000067606",2396.17,2],
+  ["sarcoma","ENSG00000275234",2351.15,3],
+  ["sarcoma","ENSG00000065361",2248.72,4],
+  ["sarcoma","ENSG00000130545",2172.55,5],
+  ["skin cutaneous melanoma","ENSG00000223362",4098.99,1],
+  ["skin cutaneous melanoma","ENSG00000124900",4098.95,2],
+  ["skin cutaneous melanoma","ENSG00000185664",3807.23,3],
+  ["skin cutaneous melanoma","ENSG00000077498",3747.85,4],
+  ["skin cutaneous melanoma","ENSG00000254813",3446.61,5],
+  ["stomach adenocarcinoma","ENSG00000169876",3866.01,1],
+  ["stomach adenocarcinoma","ENSG00000279502",3835.71,2],
+  ["stomach adenocarcinoma","ENSG00000259735",3729.89,3],
+  ["stomach adenocarcinoma","ENSG00000233376",3404.51,4],
+  ["stomach adenocarcinoma","ENSG00000228830",3341.78,5],
+  ["testicular germ cell tumor","ENSG00000274652",22656.43,1],
+  ["testicular germ cell tumor","ENSG00000176979",11804.81,2],
+  ["testicular germ cell tumor","ENSG00000204547",9288.60,3],
+  ["testicular germ cell tumor","ENSG00000187569",8496.68,4],
+  ["testicular germ cell tumor","ENSG00000227059",7855.01,5],
+  ["thymoma","ENSG00000236656",18146.71,1],
+  ["thymoma","ENSG00000198965",18016.17,2],
+  ["thymoma","ENSG00000198703",12092.01,3],
+  ["thymoma","ENSG00000278410",11916.80,4],
+  ["thymoma","ENSG00000235492",8301.85,5],
+  ["thyroid carcinoma","ENSG00000240237",27786.52,1],
+  ["thyroid carcinoma","ENSG00000042832",23998.54,2],
+  ["thyroid carcinoma","ENSG00000186146",17584.89,3],
+  ["thyroid carcinoma","ENSG00000249295",12932.36,4],
+  ["thyroid carcinoma","ENSG00000204368",10535.15,5],
+  ["uterine carcinosarcoma","ENSG00000232064",210106.43,1],
+  ["uterine carcinosarcoma","ENSG00000252508",989.93,2],
+  ["uterine carcinosarcoma","ENSG00000242671",591.64,3],
+  ["uterine carcinosarcoma","ENSG00000143353",545.47,4],
+  ["uterine carcinosarcoma","ENSG00000228082",510.35,5],
+  ["uterine corpus endometrioid carcinoma","ENSG00000260676",2664.41,1],
+  ["uterine corpus endometrioid carcinoma","ENSG00000164736",1429.19,2],
+  ["uterine corpus endometrioid carcinoma","ENSG00000197745",1403.98,3],
+  ["uterine corpus endometrioid carcinoma","ENSG00000163132",1304.30,4],
+  ["uterine corpus endometrioid carcinoma","ENSG00000168818",1303.13,5],
+  ["uveal melanoma","ENSG00000249727",3759.67,1],
+  ["uveal melanoma","ENSG00000185664",3311.99,2],
+  ["uveal melanoma","ENSG00000077498",2418.57,3],
+  ["uveal melanoma","ENSG00000120215",2398.68,4],
+  ["uveal melanoma","ENSG00000118434",2216.76,5],
+];
+
+// Build indices
+const GENE_INDEX = {};
+const CANCER_GENES = {};
+
+RAW.forEach(([cancer, gene, f_score, rank]) => {
+  if (!CANCER_GENES[cancer]) CANCER_GENES[cancer] = [];
+  CANCER_GENES[cancer].push({ gene, f_score, rank });
+});
+
+RAW.forEach(([cancer, gene, f_score, rank]) => {
+  const base = gene.split('.')[0];
+  if (!GENE_INDEX[base]) GENE_INDEX[base] = [];
+  if (!GENE_INDEX[base].some(x => x.cancer === cancer)) {
+    GENE_INDEX[base].push({ cancer, f_score, rank, allGenes: CANCER_GENES[cancer] });
+  }
+});
+
+function ann(geneId) {
+  return GENE_ANNOTATIONS[geneId] || { name: null, desc: null };
+}
+
+function getDisplayName(geneId) {
+  const a = ann(geneId);
+  if (a.name && a.name !== 'NH') return a.name;
+  return geneId;
+}
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function rankClass(i) { return ['rank-1','rank-2','rank-3','rank-other'][Math.min(i,3)]; }
+function rankLabel(i) {
+  return ['🥇 Top match','🥈 2nd match','🥉 3rd match'][i] || `Match #${i+1}`;
+}
+
+function rankPillClass(r) {
+  return [`rank-pill rank-pill-1`,`rank-pill rank-pill-2`,`rank-pill rank-pill-3`,`rank-pill rank-pill-other`][Math.min(r-1,3)];
+}
+
+// ── TABS ──
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['search','browse'][i] === name));
+  document.querySelectorAll('.tab-panel').forEach((p,i) => p.classList.toggle('active', ['tab-search','tab-browse'][i] === `tab-${name}`));
+  if (name === 'browse') renderBrowseGrid();
+}
+
+// ── SEARCH ──
+function fillAndSearch(q) {
+  document.getElementById('gene-input').value = q;
+  search();
+  switchTab('search');
+}
+
+function search() {
+  const raw = document.getElementById('gene-input').value.trim();
+  if (!raw) return;
+
+  const upper = raw.toUpperCase().replace(/\.\d+$/, '');
+  const resultsEl = document.getElementById('search-results');
+  const nfEl = document.getElementById('not-found');
+  resultsEl.innerHTML = ''; nfEl.style.display = 'none';
+
+  // Try direct ID lookup, then name lookup
+  let matches = GENE_INDEX[upper];
+  let resolvedId = upper;
+
+  if (!matches && NAME_TO_ID[upper]) {
+    resolvedId = NAME_TO_ID[upper];
+    matches = GENE_INDEX[resolvedId];
+  }
+
+  if (!matches || matches.length === 0) {
+    nfEl.style.display = 'block';
+    nfEl.innerHTML = `
+      <div class="nf-icon">🔬</div>
+      <div class="nf-title">Gene not in top markers</div>
+      <div class="nf-text"><strong style="font-family:var(--mono);color:var(--text)">${raw}</strong> was not identified as a top-5 discriminative marker for any of the 32 cancer types.<br><br>This doesn't mean it's unimportant — it just wasn't among the strongest differentiators in a one-vs-rest ANOVA across 60,498 genes. Try one of the examples above.</div>`;
+    return;
+  }
+
+  const sorted = [...matches].sort((a,b) => b.f_score - a.f_score);
+  const maxF = sorted[0].f_score;
+  const geneAnn = ann(resolvedId);
+  const displayName = (geneAnn.name && geneAnn.name !== 'NH') ? geneAnn.name : null;
+
+  let html = `<div class="result-header">
+    <div class="gene-badge">${resolvedId}</div>
+    ${displayName ? `<div class="gene-name-display">${displayName}</div>` : ''}
+    <div class="result-subtitle">Top marker in <strong>${sorted.length}</strong> cancer type${sorted.length>1?'s':''}</div>
+  </div>`;
+
+  // Gene info card
+  if (geneAnn.desc) {
+    html += `<div class="gene-info-card"><div class="gene-info-label">About this gene</div><div class="gene-info-desc">${geneAnn.desc}</div></div>`;
+  } else if (!displayName) {
+    html += `<div class="gene-info-card"><div class="gene-info-label">About this gene</div><div class="gene-info-nh">No functional annotation available in the DAVID database for this gene ID.</div></div>`;
+  }
+
+  sorted.forEach((match, i) => {
+    const pct = Math.round((match.f_score / maxF) * 100);
+    const rc = rankClass(i);
+    const chips = match.allGenes.map(g => {
+      const base = g.gene.split('.')[0];
+      const isThis = base === resolvedId;
+      const gName = getDisplayName(base);
+      return `<div class="ctx-gene ${isThis?'highlighted':''}" onclick="fillAndSearch('${base}')">
+        <span class="ctx-gene-id">${base}</span>
+        <span class="ctx-gene-name">${gName !== base ? gName : ''}</span>
+      </div>`;
+    }).join('');
+
+    html += `<div class="match-card ${rc}">
+      <div class="match-top">
+        <div>
+          <div class="match-rank">${rankLabel(i)}</div>
+          <div class="cancer-name">${cap(match.cancer)}</div>
+        </div>
+        <div class="score-badge">F = ${match.f_score.toLocaleString()}</div>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:0%" data-target="${pct}%"></div></div>
+      <div class="gene-context">
+        <div class="context-label">Top 5 marker genes for this cancer — click to explore</div>
+        ${chips}
+      </div>
+    </div>`;
+  });
+
+  resultsEl.innerHTML = html;
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.bar-fill').forEach(b => { b.style.width = b.dataset.target; });
+  });
+}
+
+// ── BROWSE ──
+function renderBrowseGrid() {
+  const grid = document.getElementById('cancer-grid');
+  const detail = document.getElementById('cancer-detail');
+  if (grid.innerHTML) return;
+  detail.style.display = 'none';
+
+  const cancers = Object.keys(CANCER_GENES);
+  grid.innerHTML = `<div class="browse-grid">${cancers.map(cancer => {
+    const top = CANCER_GENES[cancer][0];
+    const topName = getDisplayName(top.gene);
+    return `<div class="browse-card" onclick="showCancerDetail('${cancer.replace(/'/g,"\\'")}')">
+      <div class="browse-cancer">${cap(cancer)}</div>
+      <div class="browse-top-gene">${top.gene}</div>
+      <div class="browse-top-name">${topName !== top.gene ? topName : 'No annotation'}</div>
+      <div class="browse-fscore">Top F = ${top.f_score.toLocaleString()}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function showCancerDetail(cancer) {
+  document.getElementById('cancer-grid').innerHTML = '';
+  const detail = document.getElementById('cancer-detail');
+  const genes = CANCER_GENES[cancer];
+  detail.style.display = 'block';
+
+  const rankColors = ['rank-pill-1','rank-pill-2','rank-pill-3','rank-pill-other','rank-pill-other'];
+
+  let html = `<div class="cancer-detail-title">${cap(cancer)}</div>
+    <div class="cancer-detail-sub">Top 5 discriminative genes by ANOVA F-score (one-vs-rest across 60,498 genes)</div>`;
+
+  genes.forEach((g, i) => {
+    const base = g.gene.split('.')[0];
+    const a = ann(base);
+    const name = (a.name && a.name !== 'NH') ? a.name : null;
+    html += `<div class="gene-row">
+      <div class="gene-row-top">
+        <div class="${rankPillClass(g.rank)}">${g.rank}</div>
+        <div>
+          <div class="gene-row-id" style="cursor:pointer" onclick="fillAndSearch('${base}')">${base}</div>
+          ${name ? `<div class="gene-row-name">${name}</div>` : `<div class="gene-row-name" style="color:var(--muted);font-style:italic">No annotation</div>`}
+        </div>
+        <div class="gene-row-score">F = ${g.f_score.toLocaleString()}</div>
+      </div>
+      ${a.desc ? `<div class="gene-row-desc">${a.desc}</div>` : `<div class="gene-row-nh">No functional description available in DAVID database.</div>`}
+    </div>`;
+  });
+
+  document.getElementById('cancer-detail-content').innerHTML = html;
+}
+
+function showGrid() {
+  document.getElementById('cancer-detail').style.display = 'none';
+  renderBrowseGrid();
+}
+
+// Enter key
+document.getElementById('gene-input').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+</script>
+</body>
+</html>
